@@ -1,0 +1,22 @@
+{
+  "name": "mvcontact-bot",
+  "version": "1.0.0",
+  "description": "Chat Bot",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Lexevolution/mvcontact-bot.git"
+  },
+  "author": "Lexevo",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Lexevolution/mvcontact-bot/issues"
+  },
+  "homepage": "https://github.com/Lexevolution/mvcontact-bot#readme",
+  "dependencies": {
+    "@microsoft/signalr": "^7.0.3"
+  }
+}
