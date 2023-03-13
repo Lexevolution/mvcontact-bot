@@ -21,8 +21,8 @@ let loggedInData = {
 }
 
 //Login
-console.log(`Logging in with: ${JSON.stringify(loginData)}`);
-let loginHeaders = {
+console.log(`Logging in...`);
+const loginHeaders = {
     "Content-Type": "application/json",
     "Content-Length": JSON.stringify(loginData).length,
     "TOTP": config.TOTP
@@ -47,15 +47,44 @@ let loginRequest = https.request({
         loggedInData.expiry = loginResponse.expiry;
         loggedInData.fullToken = `neos ${loginResponse.userId}:${loginResponse.token}`;
         if (res.statusCode === 200){
-            console.log(`Successfully logged in with: ${JSON.stringify(loggedInData)}`);
+            console.log(`Successfully logged in!`);
+            runAutoFriendAccept();
+            runStatusUpdate();
+            runSignalR();
         }
     });
 });
 loginRequest.write(JSON.stringify(loginData));
 loginRequest.end();
 
+// Every 90 seconds, update status
+let statusUpdateData = {
+    "onlineStatus": "Online",
+    "lastStatusChange": "",
+    "compatibilityHash": "mvcontactbot",
+    "neosVersion": config.versionName,
+    "outputDevice": "Unknown",
+    "isMobile": false,
+    "currentSessionHidden": false,
+    "currentHosting": true,
+    "currentSessionAccessLevel": 0
+}
+
+setInterval(runStatusUpdate, 90000);
+
 // Every 2 minutes, accept all of the incoming friend requests.
-setInterval(() => {
+setInterval(runAutoFriendAccept, 120000);
+
+function GenerateRandomMachineId(){
+    let result = '';
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 12; i++){
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+    return result;
+}
+
+function runAutoFriendAccept() {
     if (config.autoAcceptFriendRequests){
         console.log("Start auto accept friend requests.");
         let friendList = [];
@@ -98,7 +127,9 @@ setInterval(() => {
                             if (res2.statusCode == 200){
                                 console.log(`Successfully added ${friend.id} as a contact!`);
                             }
-                            console.log(`Success HTTP ${res2.statusCode}: ${JSON.stringify(data)}`);
+                            else{
+                                console.log(`Success HTTP ${res2.statusCode}: ${JSON.stringify(data)}`);
+                            }
                         });
                         res2.on('error', (err) => {
                             console.log(`Error HTTP ${res2.statusCode}: ${JSON.stringify(err)}`);
@@ -111,22 +142,9 @@ setInterval(() => {
         });
         friendRequest.end();
     }
-}, 120000);
-
-// Every 90 seconds, update status
-let statusUpdateData = {
-    "onlineStatus": "Online",
-    "lastStatusChange": "",
-    "compatibilityHash": "mvcontactbot",
-    "neosVersion": config.versionName,
-    "outputDevice": "Unknown",
-    "isMobile": false,
-    "currentSessionHidden": false,
-    "currentHosting": true,
-    "currentSessionAccessLevel": 0
 }
 
-setInterval(() => {
+function runStatusUpdate() {
     console.log("Start updating status");
     statusUpdateData.lastStatusChange = (new Date(Date.now())).toISOString();
     let updateStatus = https.request({
@@ -155,10 +173,11 @@ setInterval(() => {
     });
     updateStatus.write(JSON.stringify(statusUpdateData));
     updateStatus.end();
-}, 90000);
+}
 
-//Connect to SignalR
-setTimeout(() => {
+
+function runSignalR() {
+    //Connect to SignalR
     const signalRConnection = new signalR.HubConnectionBuilder()
         .withUrl("https://api.neos.com/hub", {
             headers: {
@@ -171,9 +190,10 @@ setTimeout(() => {
         .build()
 
     signalRConnection.start();
-    
+
     //Actions whenever a message is received
     signalRConnection.on("ReceiveMessage", (message) => {
+        console.log(`Received ${message.messageType} message from ${message.senderId}: ${message.content}`);
         let readMessageData = {
                 "senderId": message.senderId,
                 "readTime": (new Date(Date.now())).toISOString(),
@@ -182,34 +202,24 @@ setTimeout(() => {
                 ]
         }
         signalRConnection.send("MarkMessagesRead", readMessageData);
-        if (message.messageType == "Text" && message.content.startsWith("/echo")){
-            let sendMessageData = {
-                "id": `MSG-${randomUUID()}`,
-                "senderId": loggedInData.userId,
-                "recipientId": message.senderId,
-                "messageType": "Text",
-                "sendTime": (new Date(Date.now())).toISOString(),
-                "lastUpdateTime": (new Date(Date.now())).toISOString(),
-                "content": message.content.slice(6)
+        if (message.messageType == "Text"){
+            if (message.content.startsWith("/echo ")){
+                let sendMessageData = {
+                    "id": `MSG-${randomUUID()}`,
+                    "senderId": loggedInData.userId,
+                    "recipientId": message.senderId,
+                    "messageType": "Text",
+                    "sendTime": (new Date(Date.now())).toISOString(),
+                    "lastUpdateTime": (new Date(Date.now())).toISOString(),
+                    "content": message.content.slice(6)
+                }
+    
+                signalRConnection.send("SendMessage", sendMessageData);
             }
-
-            signalRConnection.send("SendMessage", sendMessageData);
         }
     });
 
     signalRConnection.on("MessageSent", (data) => {
-        console.log(`SEND: ${JSON.stringify(data)}`);
+        console.log(`Sent ${data.messageType} message to ${data.recipientId}: ${data.content}`);
     });
-
-}, 2000);
-
-
-
-function GenerateRandomMachineId(){
-    let result = '';
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 12; i++){
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-    }
-    return result;
 }
