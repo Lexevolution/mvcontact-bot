@@ -17,6 +17,6 @@
   },
   "homepage": "https://github.com/Lexevolution/mvcontact-bot#readme",
   "dependencies": {
-    "@microsoft/signalr": "^7.0.3"
+    "@microsoft/signalr": "^7.0.5"
   }
 }
