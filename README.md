@@ -1,6 +1,7 @@
 # mvcontact-bot
 A chat bot module that currently works with NeosVR. This allows you to create your own chat bots.
 
+(Currently unfinished. Although most functionality is already implemented.)
 ## Usage
 (There are usage examples in the [examples](./examples) folder)
 - Include the module in your code

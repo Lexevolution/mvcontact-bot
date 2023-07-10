@@ -85,6 +85,31 @@ class MVContactBot extends EventEmitter {
         return p;
     }
 
+    async logout(){
+        if(this.signalRConnection !== undefined){
+            throw new Error("Please stop this bot before logging out.");
+        }
+        else if(!this.data.loggedIn){
+            throw new Error("This bot is already logged out!");
+        }
+        const res = await fetch(`https://${baseAPIURL}/api/userSessions/${this.data.userId}/${this.data.token}`,
+            {
+                method: "DELETE",
+                headers: {
+                    "Authorization": this.data.fullToken
+                }
+            }
+        );
+        if (res.status !== 200){
+            throw new Error(`Unexpected HTTP status when logging out (${res.status} ${res.statusText}): ${res.body}`);
+        }
+        
+        this.data.loggedIn = false;
+        this.data.fullToken = "";
+        this.data.token = "";
+        this.data.userId = "";
+    }
+
     async start(){
         //Need to check if logged in
         if (!this.data.loggedIn){
