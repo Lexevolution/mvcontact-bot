@@ -134,6 +134,7 @@ class MVContactBot extends EventEmitter {
         clearInterval(this.autoRunners.autoAcceptFriendRequests);
         clearInterval(this.autoRunners.updateStatus);
         clearInterval(this.autoRunners.extendLogin);
+        this.signalRConnection = undefined;
     }
 
     runAutoFriendAccept() {
