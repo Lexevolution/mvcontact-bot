@@ -1,5 +1,10 @@
 {
     "username": "",
     "password": "",
-    "versionName": "</closeall><size=50000>Neos contact bot test</size>"
+    "TOTP": "",
+    "autoAcceptFriendRequests": true,
+    "autoExtendLogin": true,
+    "updateStatus": true,
+    "readMessagesOnReceive": true,
+    "versionName": "Neos contact bot test - by Lexevo"
 }

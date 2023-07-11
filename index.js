@@ -1,4 +1,3 @@
-const https = require('https');
 const signalR = require("@microsoft/signalr");
 const {randomUUID} = require("crypto");
 const EventEmitter = require('events');
@@ -35,7 +34,7 @@ class MVContactBot extends EventEmitter {
         this.signalRConnection = undefined;
     }
 
-    login() {
+    async login() {
         const loginData = {
             "username": this.config.username,
             "password": this.config.password,
@@ -43,46 +42,29 @@ class MVContactBot extends EventEmitter {
             "secretMachineId": this.data.currentMachineID
         };
 
-        let p = new Promise((resolve, reject) => {
-            let loginRequest = https.request({
-                hostname: baseAPIURL,
-                path: "/api/userSessions",
+        const res = await fetch(`https://${baseAPIURL}/api/userSessions`,
+            {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Content-Length": JSON.stringify(loginData).length,
                     "TOTP": this.config.TOTP
-                }
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => { data += chunk });
-
-                res.on('end', () => {
-                    if (res.statusCode === 200){
-
-                        const loginResponse = JSON.parse(data);
-                        this.data.userId = loginResponse.userId;
-                        this.data.token = loginResponse.token;
-                        this.data.fullToken = `neos ${loginResponse.userId}:${loginResponse.token}`;
-                        this.data.tokenExpiry = loginResponse.expire;
-                        this.data.loggedIn = true;
-                        resolve();
-                    }
-                    else {
-                        reject(`Unexpected return code ${res.statusCode}: ${data}`);
-                    }
-                });
-
-                res.on('error', (err) => {
-                    reject(err.message);
-                });
-            });
-            loginRequest.write(JSON.stringify(loginData));
-            loginRequest.end();
-        });
-
-        //This is to be able to wait until the resolve() or reject() in the promise, which is when it should continue
-        return p;
+                },
+                body: JSON.stringify(loginData)
+            }
+        );
+        
+        if (res.status === 200){
+            const loginResponse = await res.json();
+            this.data.userId = loginResponse.userId;
+            this.data.token = loginResponse.token;
+            this.data.fullToken = `neos ${loginResponse.userId}:${loginResponse.token}`;
+            this.data.tokenExpiry = loginResponse.expire;
+            this.data.loggedIn = true;
+        }
+        else {
+            throw new Error(`Unexpected return code ${res.status}: ${await res.text()}`);
+        }
     }
 
     async logout(){
@@ -137,67 +119,50 @@ class MVContactBot extends EventEmitter {
         this.signalRConnection = undefined;
     }
 
-    runAutoFriendAccept() {
+    async runAutoFriendAccept() {
         if (this.config.autoAcceptFriendRequests){
             console.log("Start auto accept friend requests.");
             let friendList = [];
-            let friendRequest = https.request({
-                hostname: baseAPIURL,
-                path: `/api/users/${this.data.userId}/friends`,
-                method: "GET",
-                headers: {
-                    "Authorization": this.data.fullToken
-                }
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-        
-                res.on('end', () => {
-                    JSON.parse(data).forEach(friend => {
-                        if (friend.friendStatus == "Requested"){
-                            friendList.push(friend);
-                        }
-                    });
-                    friendList.forEach(friend => {
-                        friend.friendStatus = "Accepted";
-                        let updateFriends = https.request({
-                            hostname: baseAPIURL,
-                            path: `/api/users/${this.data.userId}/friends/${friend.id}`,
-                            method: "PUT",
-                            headers: {
-                                "Authorization": this.data.fullToken,
-                                "Content-Type": "application/json",
-                                "Content-Length": JSON.stringify(friend).length
-                            }
-                        }, (res2) => {
-                            let data = '';
-                            res2.on('data', (chunk) => {
-                                data += chunk;
-                            });
-                            res2.on('end', () => {
-                                if (res2.statusCode == 200){
-                                    console.log(`Successfully added ${friend.id} as a contact!`);
-                                }
-                                else{
-                                    console.log(`Success HTTP ${res2.statusCode}: ${JSON.stringify(data)}`);
-                                }
-                            });
-                            res2.on('error', (err) => {
-                                console.log(`Error HTTP ${res2.statusCode}: ${JSON.stringify(err)}`);
-                            });
-                        });
-                        updateFriends.write(JSON.stringify(friend));
-                        updateFriends.end();
-                    });               
+            const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends`,
+                {headers: {"Authorization": this.data.fullToken}}
+            );
+
+            await res.json().then(friends => {
+                friends.forEach(friend => {
+                    if (friend.friendStatus == "Requested"){
+                        friendList.push(friend);
+                    }
                 });
             });
-            friendRequest.end();
+
+            friendList.forEach(async friend => {
+                friend.friendStatus = "Accepted";
+                const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends/${friend.id}`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            "Authorization": this.data.fullToken,
+                            "Content-Type": "application/json",
+                            "Content-Length": JSON.stringify(friend).length
+                        },
+                        body: JSON.stringify(friend)
+                    }
+                );
+
+                if (res.status === 200){
+                    console.log(`Successfully added ${friend.id} as a contact!`);
+                }
+                else if (res.ok){
+                    console.log(`Success HTTP ${res.status}: ${await res.text()}`);
+                }
+                else {
+                    throw new Error(`Error adding contact ${friend.id} (HTTP ${res.status}): ${await res.text()}`);
+                }
+            });
         }
     }
 
-    runStatusUpdate() {
+    async runStatusUpdate() {
         if (this.config.updateStatus){
             let statusUpdateData = {
                 "onlineStatus": "Online",
@@ -213,55 +178,47 @@ class MVContactBot extends EventEmitter {
             
             console.log("Start updating status");
             statusUpdateData.lastStatusChange = (new Date(Date.now())).toISOString();
-            let updateStatus = https.request({
-                hostname: baseAPIURL,
-                path: `/api/users/${this.data.userId}/status`,
-                method: "PUT",
-                headers: {
-                    "Authorization": this.data.fullToken,
-                    "Content-Type": "application/json",
-                    "Content-Length": JSON.stringify(statusUpdateData).length
+            const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/status`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Authorization": this.data.fullToken,
+                        "Content-Type": "application/json",
+                        "Content-Length": JSON.stringify(statusUpdateData).length
+                    },
+                    body: JSON.stringify(statusUpdateData)
                 }
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => {
-                    data += chunk;
-                });
-                res.on('end', () => {
-                    if (res.statusCode != 200){
-                        console.error(data);
-                    }
-                    else {
-                        console.log("Status update successful!");
-                    }
-                });
-                
-            });
-            updateStatus.write(JSON.stringify(statusUpdateData));
-            updateStatus.end();
+            );
+
+            if (res.status === 200) {
+                console.log("Status update successful!");
+            }
+            else {
+                throw new Error(await res.text());
+            }
         }
     }
 
-    extendLogin() {
+    async extendLogin() {
         if (this.config.autoExtendLogin){
             if ((Date.parse(this.data.tokenExpiry) - 600000) < Date.now()){
                 console.log("Extending login");
-                let sessionExtend = https.request({
-                    hostname: baseAPIURL,
-                    path: "api/userSessions",
-                    method: "PATCH",
-                    headers: {
-                        "Authorization": this.data.fullToken
-                    }
-                }, (res) => {
-                    res.on('end', () => {
-                        if (res.statusCode === 204){
-                            this.data.tokenExpiry = (new Date(Date.now() + 8.64e+7)).toISOString();
-                            console.log("Successfully extended login session.");
+                const res = await fetch(`https://${baseAPIURL}/api/userSessions`,
+                    {
+                        method: "PATCH",
+                        headers: {
+                            "Authorization": this.data.fullToken
                         }
-                    });
-                });
-                sessionExtend.end();
+                    }
+                );
+                
+                if (res.ok){
+                    this.data.tokenExpiry = (new Date(Date.now() + 8.64e+7)).toISOString();
+                    console.log("Successfully extended login session.");
+                }
+                else{
+                    throw new Error("Couldn't extend login.");
+                }
             }
         }
     }
