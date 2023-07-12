@@ -1,8 +1,8 @@
 /* This is a test project that I was experimenting with to figure out how things would work with the bot.
 You can take this as another example if you need, but it's not neat at all.
 */
-const {MVContactBot} = require('./index');
-const config = require('./examples/config.json');
+const {MVContactBot} = require('../../index');
+const config = require('../config.json');
 const fs = require('fs');
 const https = require('https');
 const { exec } = require("child_process");
