@@ -1,0 +1,2 @@
+- Logging bot events to file.
+- Add functionality to only accept friends from a list.
