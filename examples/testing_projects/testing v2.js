@@ -39,6 +39,14 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
             testBot.sendTextMessage(sendingUser,stringBuilder.trim());
         });
     }
+
+    //Cannot message non-contacts.
+    if (message.startsWith("/msg ") && sendingUser === "U-Lexevo"){
+        const outUser = message.split(' ')[1];
+        const outMsg = message.split(' ').slice(2).join(' ');
+        testBot.sendTextMessage(outUser, outMsg);
+        testBot.sendTextMessage(sendingUser, `Sent message to ${outUser}!`);
+    }
 });
 
 runBot();

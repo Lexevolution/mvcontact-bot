@@ -1,6 +1,7 @@
 const signalR = require("@microsoft/signalr");
 const {randomUUID} = require("crypto");
 const EventEmitter = require('events');
+const {botLog} = require("./logging");
 
 const baseAPIURL = "api.neos.com";
 
@@ -121,7 +122,7 @@ class MVContactBot extends EventEmitter {
 
     async runAutoFriendAccept() {
         if (this.config.autoAcceptFriendRequests){
-            console.log("Start auto accept friend requests.");
+            botLog(this, "testing", "INFO", "Start auto accept friend requests.");
             let friendList = [];
             const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends`,
                 {headers: {"Authorization": this.data.fullToken}}
@@ -150,10 +151,10 @@ class MVContactBot extends EventEmitter {
                 );
 
                 if (res.status === 200){
-                    console.log(`Successfully added ${friend.id} as a contact!`);
+                    botLog(this, "testing", "INFO", `Successfully added ${friend.id} as a contact!`);
                 }
                 else if (res.ok){
-                    console.log(`Success HTTP ${res.status}: ${await res.text()}`);
+                    botLog(this, "testing", "INFO", `Success HTTP ${res.status}: ${await res.text()}`);
                 }
                 else {
                     throw new Error(`Error adding contact ${friend.id} (HTTP ${res.status}): ${await res.text()}`);
@@ -176,7 +177,7 @@ class MVContactBot extends EventEmitter {
                 "currentSessionAccessLevel": 0
             }
             
-            console.log("Start updating status");
+            botLog(this, "testing", "INFO", "Start updating status");
             statusUpdateData.lastStatusChange = (new Date(Date.now())).toISOString();
             const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/status`,
                 {
@@ -191,7 +192,7 @@ class MVContactBot extends EventEmitter {
             );
 
             if (res.status === 200) {
-                console.log("Status update successful!");
+                botLog(this, "testing", "INFO", "Status update successful!");
             }
             else {
                 throw new Error(await res.text());
@@ -202,7 +203,7 @@ class MVContactBot extends EventEmitter {
     async extendLogin() {
         if (this.config.autoExtendLogin){
             if ((Date.parse(this.data.tokenExpiry) - 600000) < Date.now()){
-                console.log("Extending login");
+                botLog(this, "testing", "INFO", "Extending login");
                 const res = await fetch(`https://${baseAPIURL}/api/userSessions`,
                     {
                         method: "PATCH",
@@ -214,7 +215,7 @@ class MVContactBot extends EventEmitter {
                 
                 if (res.ok){
                     this.data.tokenExpiry = (new Date(Date.now() + 8.64e+7)).toISOString();
-                    console.log("Successfully extended login session.");
+                    botLog(this, "testing", "INFO", "Successfully extended login session.");
                 }
                 else{
                     throw new Error("Couldn't extend login.");
@@ -242,7 +243,7 @@ class MVContactBot extends EventEmitter {
     
         //Actions whenever a message is received
         this.signalRConnection.on("ReceiveMessage", (message) => {
-            console.log(`Received ${message.messageType} message from ${message.senderId}: ${message.content}`);
+            botLog(this, "testing", "INFO", `Received ${message.messageType} message from ${message.senderId}: ${message.content}`);
             if (this.config.readMessagesOnReceive){
                 let readMessageData = {
                         "senderId": message.senderId,
@@ -270,12 +271,12 @@ class MVContactBot extends EventEmitter {
                     this.emit("receiveSessionInviteMessage", message.senderId, JSON.parse(message.content).name, JSON.parse(message.content).sessionId);
                     break;
                 default:
-                    console.log("Couldn't find a message type match!");
+                    botLog(this, "testing", "WARNING", "Couldn't find a message type match!");
             }
         });
     
         this.signalRConnection.on("MessageSent", (data) => {
-            console.log(`Sent ${data.messageType} message to ${data.recipientId}: ${data.content}`);
+            botLog(this, "testing", "INFO", `Sent ${data.messageType} message to ${data.recipientId}: ${data.content}`);
         });
     }
 
