@@ -6,5 +6,6 @@
     "autoExtendLogin": true,
     "updateStatus": true,
     "readMessagesOnReceive": true,
-    "versionName": "Neos contact bot test - by Lexevo"
+    "versionName": "Neos contact bot test - by Lexevo",
+    "logPath": "."
 }

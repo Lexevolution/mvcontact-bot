@@ -49,6 +49,7 @@ The config used for the constructor of the `MVContactBot` is an object and has a
 - `updateStatus` (optional, bool, default: `true`): If true, will make the associated Neos account show as Online and will display the version name from the `versionName` parameter. If using this bot on the same Neos account as a Neos headless client, it is recommended to set this to `false`.
 - `readMessagesOnReceive` (optional, bool, default: `true`): If true, will automatically mark all messages that it receives as read. This is useful to indicate to a user if a bot is receiving their message.
 - `versionName` (optional, string, default: `"Neos Contact Bot"`): When `updateStatus` is `true`, will display this as the version used. This can be programatically changed on the fly.
+- `logPath` (optional, filepath/directory as string, default: `"."`): The relative or absolute directory or file path that the bot will log to. If it is a directory, the bot will create a named and timestamped log file on each run in that directory. If it is a filename, it will log to that file. The directory/file needs to exist beforehand.
 
 ## Sending Messages
 These are the current methods provided to send messages:
