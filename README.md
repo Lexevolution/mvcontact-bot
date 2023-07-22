@@ -44,12 +44,16 @@ The config used for the constructor of the `MVContactBot` is an object and has a
 - `username` (required, string): The NeosVR account username that the bot will use.
 - `password` (required, string): The NeosVR account password that the bot will use.
 - `TOTP` (optional, string): If the NeosVR account has TOTP enabled for login, supply the 6 digit code here.
-- `autoAcceptFriendRequests` (optional, bool, default: `true`): If true, will automatically accept any incoming contact requests to the associated Neos account.
+- `autoAcceptFriendRequests` (optional, enum as string, default: `"all"`): Can be `"all"`, `"list"` or `"none"`.
+    - `"all"`: The bot will automatically accept all contact requests.
+    - `"list"`: The bot will only accept an incoming contact request if the User ID of that request is in the bot's `data.whitelist` list. This list can only be added to when the bot is created, so you will need another form of storage to keep a non-volatile whitelist.
+    - `"none"`: The bot will do nothing with incoming contact requests.
 - `autoExtendLogin` (optional, bool, default: `true`): If true, will keep extending the login session of the associated Neos account, so it doesn't automatically logout.
 - `updateStatus` (optional, bool, default: `true`): If true, will make the associated Neos account show as Online and will display the version name from the `versionName` parameter. If using this bot on the same Neos account as a Neos headless client, it is recommended to set this to `false`.
 - `readMessagesOnReceive` (optional, bool, default: `true`): If true, will automatically mark all messages that it receives as read. This is useful to indicate to a user if a bot is receiving their message.
 - `versionName` (optional, string, default: `"Neos Contact Bot"`): When `updateStatus` is `true`, will display this as the version used. This can be programatically changed on the fly.
-- `logPath` (optional, filepath/directory as string, default: `"."`): The relative or absolute directory or file path that the bot will log to. If it is a directory, the bot will create a named and timestamped log file on each run in that directory. If it is a filename, it will log to that file. The directory/file needs to exist beforehand.
+- `logToFile` (optional, bool, default: `true`): Determines whether the log messages from the bot will also output to a file.
+- `logPath` (optional, filepath/directory as string, default: `"."`): The relative or absolute directory or file path that the bot will log to (if `logToFile` is set to true). If it is a directory, the bot will create a named and timestamped log file on each run in that directory. If it is a filename, it will log to that file. The directory/file needs to exist beforehand.
 
 ## Sending Messages
 These are the current methods provided to send messages:
@@ -105,4 +109,13 @@ myBot.on('receiveObjectMessage', (senderId, name, objectAssetUrl) => {
 myBot.on('receiveSessionInviteMessage', (senderId, name, sessionId) => {
     ...
 });
+```
+
+## Other bot functions
+- `removeFriend(friendId)`: Removes a contact off of the list of contacts.
+    - `friendId` (string): The User ID of the contact you want to remove.
+
+```js
+await myBot.removeFriend("U-Example")
+    .catch((err) => {console.log(`Error removing contact: ${err}`)});
 ```

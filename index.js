@@ -18,11 +18,12 @@ class MVContactBot extends EventEmitter {
             "username": inConfig.username,
             "password": inConfig.password,
             "TOTP": inConfig.TOTP ?? "",
-            "autoAcceptFriendRequests": inConfig.autoAcceptFriendRequests ?? true,
+            "autoAcceptFriendRequests": inConfig.autoAcceptFriendRequests ?? "all",
             "autoExtendLogin": inConfig.autoExtendLogin ?? true,
             "updateStatus": inConfig.updateStatus ?? true,
             "readMessagesOnReceive": inConfig.readMessagesOnReceive ?? true,
             "versionName": inConfig.versionName ?? "Neos Contact Bot",
+            "logToFile": inConfig.logToFile ?? true,
             "logPath": inConfig.logPath ?? "./"
         }
         this.data = {
@@ -31,11 +32,12 @@ class MVContactBot extends EventEmitter {
             "token": "",
             "fullToken": "",
             "tokenExpiry": "",
-            "loggedIn": false
+            "loggedIn": false,
+            "whitelist": []
         }
         this.autoRunners = {};
         this.signalRConnection = undefined;
-        this.logger = new botLog(this.config.username, this.config.logPath);
+        this.logger = new botLog(this.config.username, this.config.logToFile, this.config.logPath);
     }
 
     async login() {
@@ -124,9 +126,8 @@ class MVContactBot extends EventEmitter {
     }
 
     async runAutoFriendAccept() {
-        if (this.config.autoAcceptFriendRequests){
-            await this.logger.log("INFO", "Start auto accept friend requests.");
-            let friendList = [];
+        let friendList = [];
+        if (this.config.autoAcceptFriendRequests !== "none"){
             const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends`,
                 {headers: {"Authorization": this.data.fullToken}}
             );
@@ -138,39 +139,43 @@ class MVContactBot extends EventEmitter {
                     }
                 });
             });
-
-            friendList.forEach(async friend => {
-                friend.friendStatus = "Accepted";
-                const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends/${friend.id}`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            "Authorization": this.data.fullToken,
-                            "Content-Type": "application/json",
-                            "Content-Length": JSON.stringify(friend).length
-                        },
-                        body: JSON.stringify(friend)
-                    }
-                );
-
-                if (res.status === 200){
-                    await this.logger.log("INFO", `Successfully added ${friend.id} as a contact!`);
-                }
-                else if (res.ok){
-                    await this.logger.log("INFO", `Success HTTP ${res.status}: ${await res.text()}`);
-                }
-                else {
-                    throw new Error(`Error adding contact ${friend.id} (HTTP ${res.status}): ${await res.text()}`);
-                }
-            });
         }
+
+        if (this.config.autoAcceptFriendRequests === "list"){
+            friendList = friendList.filter(friend => this.data.whitelist.includes(friend.id));
+        }
+
+        friendList.forEach(async friend => {
+            friend.friendStatus = "Accepted";
+            const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends/${friend.id}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Authorization": this.data.fullToken,
+                        "Content-Type": "application/json",
+                        "Content-Length": JSON.stringify(friend).length
+                    },
+                    body: JSON.stringify(friend)
+                }
+            );
+
+            if (res.status === 200){
+                await this.logger.log("INFO", `Successfully added ${friend.id} as a contact!`);
+            }
+            else if (res.ok){
+                await this.logger.log("INFO", `Success HTTP ${res.status}: ${await res.text()}`);
+            }
+            else {
+                throw new Error(`Error adding contact ${friend.id} (HTTP ${res.status}): ${await res.text()}`);
+            }
+        });
     }
 
     async runStatusUpdate() {
         if (this.config.updateStatus){
-            let statusUpdateData = {
+            const statusUpdateData = {
                 "onlineStatus": "Online",
-                "lastStatusChange": "",
+                "lastStatusChange": new Date(Date.now()).toISOString(),
                 "compatibilityHash": "mvcontactbot",
                 "neosVersion": this.config.versionName,
                 "outputDevice": "Unknown",
@@ -180,8 +185,6 @@ class MVContactBot extends EventEmitter {
                 "currentSessionAccessLevel": 0
             }
             
-            await this.logger.log("INFO", "Start updating status");
-            statusUpdateData.lastStatusChange = (new Date(Date.now())).toISOString();
             const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/status`,
                 {
                     method: "PUT",
@@ -281,6 +284,20 @@ class MVContactBot extends EventEmitter {
         this.signalRConnection.on("MessageSent", async (data) => {
             await this.logger.log("INFO", `Sent ${data.messageType} message to ${data.recipientId}: ${data.content}`);
         });
+    }
+
+    async removeFriend(friendId){
+        const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends/${friendId}`,
+        {
+            method: "DELETE",
+            headers: {
+                "Authorization": this.data.fullToken
+            }
+        });
+
+        if (res.status !== 200){
+            throw new Error(`Unexpected error when trying to remove ${friendId}: ${res.status} ${res.statusText}${res.bodyUsed ? ': ' + res.body : '.'}`);
+        }
     }
 
     async sendRawMessage(messageData){

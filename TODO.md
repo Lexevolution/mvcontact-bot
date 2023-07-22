@@ -1,2 +1,3 @@
-- Logging bot events to file.
-- Add functionality to only accept friends from a list.
+- Test whitelist auto friend accept
+- Add try catches to make it crash less
+- Add more error logging

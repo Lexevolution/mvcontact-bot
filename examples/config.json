@@ -2,10 +2,11 @@
     "username": "",
     "password": "",
     "TOTP": "",
-    "autoAcceptFriendRequests": true,
+    "autoAcceptFriendRequests": "all",
     "autoExtendLogin": true,
     "updateStatus": true,
     "readMessagesOnReceive": true,
     "versionName": "Neos contact bot test - by Lexevo",
+    "logToFile": true,
     "logPath": "."
 }

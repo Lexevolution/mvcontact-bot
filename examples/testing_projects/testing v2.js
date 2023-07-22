@@ -47,6 +47,15 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
         testBot.sendTextMessage(outUser, outMsg);
         testBot.sendTextMessage(sendingUser, `Sent message to ${outUser}!`);
     }
+
+    if (message.startsWith("/removeContact ") && sendingUser === "U-Lexevo"){
+        const friendId = message.split(' ')[1];
+        testBot.removeFriend(friendId).then(() => {
+            testBot.sendTextMessage(sendingUser, `Successfully removed ${friendId} from the bot's contacts!`);
+        }).catch((err) => {
+            testBot.sendTextMessage(sendingUser, err);
+        });
+    }
 });
 
 runBot();
