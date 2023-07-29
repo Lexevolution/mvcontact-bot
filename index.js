@@ -69,6 +69,7 @@ class MVContactBot extends EventEmitter {
             this.data.loggedIn = true;
         }
         else {
+            await this.logger.log("ERROR", `Unexpected return code ${res.status}: ${await res.text()}`);
             throw new Error(`Unexpected return code ${res.status}: ${await res.text()}`);
         }
     }
@@ -89,6 +90,7 @@ class MVContactBot extends EventEmitter {
             }
         );
         if (res.status !== 200){
+            await this.logger.log();
             throw new Error(`Unexpected HTTP status when logging out (${res.status} ${res.statusText}): ${res.body}`);
         }
         
@@ -166,7 +168,7 @@ class MVContactBot extends EventEmitter {
                 await this.logger.log("INFO", `Success HTTP ${res.status}: ${await res.text()}`);
             }
             else {
-                throw new Error(`Error adding contact ${friend.id} (HTTP ${res.status}): ${await res.text()}`);
+                await this.logger.log("ERROR", `Error adding contact ${friend.id} (${res.status} ${res.statusText}): ${await res.text()}`);
             }
         });
     }
@@ -201,7 +203,7 @@ class MVContactBot extends EventEmitter {
                 await this.logger.log("INFO", "Status update successful!");
             }
             else {
-                throw new Error(await res.text());
+                await this.logger.log("ERROR", `Error updating status (${res.status} ${res.statusText}): ${await res.text()}`);
             }
         }
     }
@@ -224,7 +226,7 @@ class MVContactBot extends EventEmitter {
                     await this.logger.log("INFO", "Successfully extended login session.");
                 }
                 else{
-                    throw new Error("Couldn't extend login.");
+                    await this.logger.log("ERROR", `Couldn't extend login (${res.status} ${res.statusText}): ${await res.text()}`);
                 }
             }
         }
@@ -243,7 +245,8 @@ class MVContactBot extends EventEmitter {
             .configureLogging(signalR.LogLevel.Critical)
             .build();
     
-        await this.signalRConnection.start().catch((err) => {
+        await this.signalRConnection.start().catch(async (err) => {
+            await this.logger.log("ERROR", err);
             throw new Error(err);
         });
     
@@ -296,13 +299,15 @@ class MVContactBot extends EventEmitter {
         });
 
         if (res.status !== 200){
+            this.logger.log("ERROR", `Unexpected error when trying to remove ${friendId}: ${res.status} ${res.statusText}${res.bodyUsed ? ': ' + res.body : '.'}`);
             throw new Error(`Unexpected error when trying to remove ${friendId}: ${res.status} ${res.statusText}${res.bodyUsed ? ': ' + res.body : '.'}`);
         }
     }
 
     async sendRawMessage(messageData){
         await this.signalRConnection.send("SendMessage", messageData)
-        .catch((err) => {
+        .catch(async (err) => {
+            await this.logger.log("ERROR", `Couldn't send message: ${err}`);
             throw new Error(`Couldn't send message: ${err}`);
         });
     }
@@ -319,7 +324,8 @@ class MVContactBot extends EventEmitter {
         }
 
         await this.signalRConnection.send("SendMessage", messageData)
-        .catch((err) => {
+        .catch(async (err) => {
+            await this.logger.log("ERROR", `Couldn't send message: ${err}`);
             throw new Error(`Couldn't send message: ${err}`);
         });
     }

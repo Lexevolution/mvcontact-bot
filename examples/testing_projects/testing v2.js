@@ -53,7 +53,7 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
         testBot.removeFriend(friendId).then(() => {
             testBot.sendTextMessage(sendingUser, `Successfully removed ${friendId} from the bot's contacts!`);
         }).catch((err) => {
-            testBot.sendTextMessage(sendingUser, err);
+            testBot.sendTextMessage(sendingUser, `${err}`);
         });
     }
 });

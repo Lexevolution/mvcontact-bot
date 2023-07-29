@@ -1,3 +1,2 @@
 - Test whitelist auto friend accept
 - Add try catches to make it crash less
-- Add more error logging
