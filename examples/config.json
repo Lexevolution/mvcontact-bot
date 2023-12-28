@@ -6,7 +6,7 @@
     "autoExtendLogin": true,
     "updateStatus": true,
     "readMessagesOnReceive": true,
-    "versionName": "Neos contact bot test - by Lexevo",
+    "versionName": "Resonite contact bot",
     "logToFile": true,
     "logPath": "."
 }

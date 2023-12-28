@@ -25,7 +25,7 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
     }
 
     if (message === "/listContacts" && sendingUser === "U-Lexevo"){
-        fetch(`https://api.neos.com/api/users/${testBot.data.userId}/friends`,
+        fetch(`https://api.resonite.com/users/${testBot.data.userId}/friends`,
             {headers: {"Authorization": testBot.data.fullToken}}
         )
         .then(async res => {
@@ -33,7 +33,7 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
             const friends = await res.json();
             friends.forEach(friend => {
                 if (friend.friendStatus === "Accepted" && friend.isAccepted === true){
-                    stringBuilder += `${friend.id}\n`;
+                    stringBuilder += `${friend.username} (${friend.id})\n`;
                 }
             });
             testBot.sendTextMessage(sendingUser,stringBuilder.trim());

@@ -1,10 +1,12 @@
 const signalR = require("@microsoft/signalr");
-const {randomUUID} = require("crypto");
+const {randomUUID, createHash, randomBytes} = require("crypto");
 const EventEmitter = require('events');
 const {botLog} = require("./logging");
 const path = require("path");
 
-const baseAPIURL = "api.neos.com";
+const baseAPIURL = "https://api.resonite.com";
+const resoniteKey = "oi+ISZuYtMYtpruYHLQLPkXgPaD+IcaRNXPI7b3Z0iYe5+AcccouLYFI9vloMmYEYDlE1PhDL52GsddfxgQeK4Z_hem84t1OXGUdScFkLSMhJA2te86LBL_rFL4JjO4F_hHHIJH1Gm1IYVuvBQjpb89AJ0D6eamd7u4MxeWeEVE=";
+const botUID = GenerateUID();
 
 /**
  * Does a cool thing
@@ -22,12 +24,13 @@ class MVContactBot extends EventEmitter {
             "autoExtendLogin": inConfig.autoExtendLogin ?? true,
             "updateStatus": inConfig.updateStatus ?? true,
             "readMessagesOnReceive": inConfig.readMessagesOnReceive ?? true,
-            "versionName": inConfig.versionName ?? "Neos Contact Bot",
+            "versionName": inConfig.versionName ?? "Resonite Contact Bot",
             "logToFile": inConfig.logToFile ?? true,
             "logPath": inConfig.logPath ?? "./"
         }
         this.data = {
             "currentMachineID": GenerateRandomMachineId(),
+            "sessionId": randomUUID(),
             "userId": "",
             "token": "",
             "fullToken": "",
@@ -43,17 +46,21 @@ class MVContactBot extends EventEmitter {
     async login() {
         const loginData = {
             "username": this.config.username,
-            "password": this.config.password,
+            "authentication": {
+                "$type": "password",
+                "password": this.config.password
+            },
             "rememberMe": false,
             "secretMachineId": this.data.currentMachineID
         };
 
-        const res = await fetch(`https://${baseAPIURL}/api/userSessions`,
+        const res = await fetch(`${baseAPIURL}/userSessions`,
             {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                     "Content-Length": JSON.stringify(loginData).length,
+                    "UID": botUID,
                     "TOTP": this.config.TOTP
                 },
                 body: JSON.stringify(loginData)
@@ -62,11 +69,12 @@ class MVContactBot extends EventEmitter {
         
         if (res.status === 200){
             const loginResponse = await res.json();
-            this.data.userId = loginResponse.userId;
-            this.data.token = loginResponse.token;
-            this.data.fullToken = `neos ${loginResponse.userId}:${loginResponse.token}`;
-            this.data.tokenExpiry = loginResponse.expire;
+            this.data.userId = loginResponse.entity.userId;
+            this.data.token = loginResponse.entity.token;
+            this.data.fullToken = `res ${loginResponse.entity.userId}:${loginResponse.entity.token}`;
+            this.data.tokenExpiry = loginResponse.entity.expire;
             this.data.loggedIn = true;
+            await this.logger.log("INFO", `Successfully logged in as ${loginResponse.entity.userId}`);
         }
         else {
             await this.logger.log("ERROR", `Unexpected return code ${res.status}: ${await res.text()}`);
@@ -81,7 +89,7 @@ class MVContactBot extends EventEmitter {
         else if(!this.data.loggedIn){
             throw new Error("This bot is already logged out!");
         }
-        const res = await fetch(`https://${baseAPIURL}/api/userSessions/${this.data.userId}/${this.data.token}`,
+        const res = await fetch(`${baseAPIURL}/userSessions/${this.data.userId}/${this.data.token}`,
             {
                 method: "DELETE",
                 headers: {
@@ -90,7 +98,7 @@ class MVContactBot extends EventEmitter {
             }
         );
         if (res.status !== 200){
-            await this.logger.log();
+            await this.logger.log("ERROR", `Unexpected HTTP status when logging out (${res.status} ${res.statusText}): ${res.body}`);
             throw new Error(`Unexpected HTTP status when logging out (${res.status} ${res.statusText}): ${res.body}`);
         }
         
@@ -108,12 +116,14 @@ class MVContactBot extends EventEmitter {
         if (this.signalRConnection !== undefined){
             throw new Error("This bot has already been started!");
         }
-        this.runAutoFriendAccept();
-        this.runStatusUpdate();
+        await this.startSignalR();
+        await setTimeout(() => {
+            this.runAutoFriendAccept();
+            this.runStatusUpdate();
+        }, 5000);
         this.autoRunners.autoAcceptFriendRequests = setInterval(this.runAutoFriendAccept.bind(this), 120000);
         this.autoRunners.updateStatus = setInterval(this.runStatusUpdate.bind(this), 90000);
         this.autoRunners.extendLogin = setInterval(this.extendLogin.bind(this), 600000);
-        await this.startSignalR();
     }
 
     async stop(){
@@ -130,7 +140,7 @@ class MVContactBot extends EventEmitter {
     async runAutoFriendAccept() {
         let friendList = [];
         if (this.config.autoAcceptFriendRequests !== "none"){
-            const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends`,
+            const res = await fetch(`${baseAPIURL}/users/${this.data.userId}/contacts`,
                 {headers: {"Authorization": this.data.fullToken}}
             );
 
@@ -149,62 +159,41 @@ class MVContactBot extends EventEmitter {
 
         friendList.forEach(async friend => {
             friend.friendStatus = "Accepted";
-            const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends/${friend.id}`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Authorization": this.data.fullToken,
-                        "Content-Type": "application/json",
-                        "Content-Length": JSON.stringify(friend).length
-                    },
-                    body: JSON.stringify(friend)
-                }
-            );
 
-            if (res.status === 200){
-                await this.logger.log("INFO", `Successfully added ${friend.id} as a contact!`);
-            }
-            else if (res.ok){
-                await this.logger.log("INFO", `Success HTTP ${res.status}: ${await res.text()}`);
-            }
-            else {
-                await this.logger.log("ERROR", `Error adding contact ${friend.id} (${res.status} ${res.statusText}): ${await res.text()}`);
-            }
+            await this.signalRConnection.send("UpdateContact", friend)
+            .catch((err) => {
+                this.logger.log("ERROR", `Error adding contact ${friend.id}: ${err}`);
+                throw new Error(err);
+            });
         });
     }
 
     async runStatusUpdate() {
         if (this.config.updateStatus){
             const statusUpdateData = {
+                "userId": this.data.userId,
                 "onlineStatus": "Online",
+                "outputDevice": "Unknown",
+                "sessionType": "Bot",
+                "userSessionId": this.data.sessionId,
+                "isPresent": true,
+                "lastPresenceTimestamp": new Date(Date.now()).toISOString(),
                 "lastStatusChange": new Date(Date.now()).toISOString(),
                 "compatibilityHash": "mvcontactbot",
-                "neosVersion": this.config.versionName,
-                "outputDevice": "Unknown",
-                "isMobile": false,
-                "currentSessionHidden": false,
-                "currentHosting": true,
-                "currentSessionAccessLevel": 0
+                "appVersion": this.config.versionName,
+                "isMobile": false
             }
-            
-            const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/status`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Authorization": this.data.fullToken,
-                        "Content-Type": "application/json",
-                        "Content-Length": JSON.stringify(statusUpdateData).length
-                    },
-                    body: JSON.stringify(statusUpdateData)
-                }
-            );
 
-            if (res.status === 200) {
-                await this.logger.log("INFO", "Status update successful!");
+            const statusUpdateGroup = {
+                "group": 1,
+                "targetIds": null
             }
-            else {
-                await this.logger.log("ERROR", `Error updating status (${res.status} ${res.statusText}): ${await res.text()}`);
-            }
+
+            //await this.logger.log("DEBUG", `Broadcasting Status: ${JSON.stringify(statusUpdateData)}`);
+            await this.signalRConnection.send("BroadcastStatus", statusUpdateData, statusUpdateGroup)
+            .catch((err) => {
+                throw new Error(err);
+            });
         }
     }
 
@@ -212,7 +201,7 @@ class MVContactBot extends EventEmitter {
         if (this.config.autoExtendLogin){
             if ((Date.parse(this.data.tokenExpiry) - 600000) < Date.now()){
                 await this.logger.log("INFO", "Extending login");
-                const res = await fetch(`https://${baseAPIURL}/api/userSessions`,
+                const res = await fetch(`${baseAPIURL}/userSessions`,
                     {
                         method: "PATCH",
                         headers: {
@@ -235,10 +224,11 @@ class MVContactBot extends EventEmitter {
     async startSignalR() {
         //Connect to SignalR
         this.signalRConnection = new signalR.HubConnectionBuilder()
-            .withUrl("https://api.neos.com/hub", {
+            .withUrl(`${baseAPIURL}/hub`, {
                 headers: {
                     "Authorization": this.data.fullToken,
-                    "UID": this.data.currentMachineID
+                    "UID": this.data.currentMachineID,
+                    "SecretClientAccessKey": resoniteKey
                 }
             })
             .withAutomaticReconnect()
@@ -262,7 +252,11 @@ class MVContactBot extends EventEmitter {
                         ]
                 }
 
-                this.signalRConnection.send("MarkMessagesRead", readMessageData);
+                await this.signalRConnection.send("MarkMessagesRead", readMessageData).catch(
+                    (reason) => {
+                        this.logger.log("ERROR", reason);
+                    }
+                );
             }
             
             this.emit("receiveRawMessage", message);
@@ -271,10 +265,10 @@ class MVContactBot extends EventEmitter {
                     this.emit("receiveTextMessage", message.senderId, message.content);
                     break;
                 case "Sound":
-                    this.emit("receiveSoundMessage", message.senderId, `https://assets.neos.com/assets/${JSON.parse(message.content).assetUri.slice(10,74)}`);
+                    this.emit("receiveSoundMessage", message.senderId, `https://assets.resonite.com/${JSON.parse(message.content).assetUri.slice(9,74)}`);
                     break;
                 case "Object":
-                    this.emit("receiveObjectMessage", message.senderId, JSON.parse(message.content).name, `https://assets.neos.com/assets/${JSON.parse(message.content).assetUri.slice(10,74)}`);
+                    this.emit("receiveObjectMessage", message.senderId, JSON.parse(message.content).name, `https://assets.resonite.com/${JSON.parse(message.content).assetUri.slice(9,74)}`);
                     break;
                 case "SessionInvite":
                     this.emit("receiveSessionInviteMessage", message.senderId, JSON.parse(message.content).name, JSON.parse(message.content).sessionId);
@@ -290,7 +284,7 @@ class MVContactBot extends EventEmitter {
     }
 
     async removeFriend(friendId){
-        const res = await fetch(`https://${baseAPIURL}/api/users/${this.data.userId}/friends/${friendId}`,
+        const res = await fetch(`${baseAPIURL}/users/${this.data.userId}/friends/${friendId}`,
         {
             method: "DELETE",
             headers: {
@@ -333,11 +327,18 @@ class MVContactBot extends EventEmitter {
 
 function GenerateRandomMachineId(){
     let result = '';
-    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    for (let i = 0; i < 12; i++){
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_';
+    for (let i = 0; i < 128; i++){
         result += characters.charAt(Math.floor(Math.random() * characters.length));
     }
     return result;
 }
 
-module.exports = {MVContactBot};
+function GenerateUID(){
+    let result = '';
+    const data = `mvcontact-bot-${randomBytes(16).toString('base64')}`;
+    result = createHash('sha256').update(data).digest('hex').toUpperCase();
+    return result;
+}
+
+module.exports = {MVContactBot};    
