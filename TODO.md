@@ -1,2 +1,3 @@
 - Test whitelist auto friend accept
 - Add try catches to make it crash less
+- Create function to lookup users by username

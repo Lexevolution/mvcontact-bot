@@ -6,6 +6,7 @@ A chat bot module that currently works with Resonite. This allows you to create 
 ## Usage
 (There are usage examples in the [examples](./examples) folder)
 - Include the module in your code
+  - `npm install github:Lexevolution/mvcontact-bot`
 - Set up your config (explained below)
 - Create a new instance of the `MVContactBot`, with the config as the parameter (you can have multiple bots):
 ```js
