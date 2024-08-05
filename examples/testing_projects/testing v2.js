@@ -25,15 +25,15 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
     }
 
     if (message === "/listContacts" && sendingUser === "U-Lexevo"){
-        fetch(`https://api.resonite.com/users/${testBot.data.userId}/friends`,
+        fetch(`https://api.resonite.com/users/${testBot.data.userId}/contacts`,
             {headers: {"Authorization": testBot.data.fullToken}}
         )
         .then(async res => {
             let stringBuilder = "";
             const friends = await res.json();
             friends.forEach(friend => {
-                if (friend.friendStatus === "Accepted" && friend.isAccepted === true){
-                    stringBuilder += `${friend.username} (${friend.id})\n`;
+                if (friend.contactStatus === "Accepted" && friend.isAccepted === true){
+                    stringBuilder += `${friend.contactUsername} (${friend.id})\n`;
                 }
             });
             testBot.sendTextMessage(sendingUser,stringBuilder.trim());
@@ -52,6 +52,15 @@ testBot.on('receiveTextMessage', (sendingUser, message) => {
         const friendId = message.split(' ')[1];
         testBot.removeFriend(friendId).then(() => {
             testBot.sendTextMessage(sendingUser, `Successfully removed ${friendId} from the bot's contacts!`);
+        }).catch((err) => {
+            testBot.sendTextMessage(sendingUser, `${err}`);
+        });
+    }
+
+    if (message.startsWith("/addContact ") && sendingUser === "U-Lexevo"){
+        const outUser = message.split(' ')[1];
+        testBot.addFriend(outUser).then(() => {
+            testBot.sendTextMessage(sendingUser, `Successfully requested ${outUser} to the bot's contacts!`);
         }).catch((err) => {
             testBot.sendTextMessage(sendingUser, `${err}`);
         });

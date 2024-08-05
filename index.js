@@ -284,18 +284,43 @@ class MVContactBot extends EventEmitter {
     }
 
     async removeFriend(friendId){
-        const res = await fetch(`${baseAPIURL}/users/${this.data.userId}/friends/${friendId}`,
+        const res = await fetch(`${baseAPIURL}/users/${this.data.userId}/contacts`,
         {
-            method: "DELETE",
             headers: {
                 "Authorization": this.data.fullToken
             }
+        });
+        const resData = await res.json();
+        let friendToRemove = resData.find(friend => friend.id == friendId);
+        friendToRemove.contactStatus = "Ignored";
+
+        await this.signalRConnection.send("UpdateContact", friendToRemove)
+        .catch(async (err) => {
+            await this.logger.log("ERROR", `Couldn't remove contact: ${err}`);
+            throw new Error(`Couldn't remove contact: ${err}`);
         });
 
         if (res.status !== 200){
             this.logger.log("ERROR", `Unexpected error when trying to remove ${friendId}: ${res.status} ${res.statusText}${res.bodyUsed ? ': ' + res.body : '.'}`);
             throw new Error(`Unexpected error when trying to remove ${friendId}: ${res.status} ${res.statusText}${res.bodyUsed ? ': ' + res.body : '.'}`);
         }
+    }
+
+    async addFriend(friendId){
+        const res = await fetch(`${baseAPIURL}/users/${friendId}`);
+        const resData = await res.json();
+        const requestedFriend = {
+            "ownerId": this.data.userId,
+            "id": friendId,
+            "contactUsername": resData.username,
+            "contactStatus": "Accepted"
+        };
+
+        await this.signalRConnection.send("UpdateContact", requestedFriend)
+        .catch(async (err) => {
+            await this.logger.log("ERROR", `Couldn't add contact: ${err}`);
+            throw new Error(`Couldn't add contact: ${err}`);
+        });
     }
 
     async sendRawMessage(messageData){

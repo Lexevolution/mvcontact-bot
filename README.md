@@ -121,3 +121,11 @@ myBot.on('receiveSessionInviteMessage', (senderId, name, sessionId) => {
 await myBot.removeFriend("U-Example")
     .catch((err) => {console.log(`Error removing contact: ${err}`)});
 ```
+
+- `addFriend(friendId)`: Sends a contact request to a user.
+    - `friendId` (string): The User ID of the user you want to request contact.
+
+```js
+await myBot.addFriend("U-Example")
+    .catch((err) => {console.log(`Error requesting contact: ${err}`)});
+```
