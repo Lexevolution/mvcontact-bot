@@ -129,3 +129,11 @@ await myBot.removeFriend("U-Example")
 await myBot.addFriend("U-Example")
     .catch((err) => {console.log(`Error requesting contact: ${err}`)});
 ```
+
+- Reacting to adding a contact
+    - `addedContact`: An event that is emitted when the bot successfully accepts a contact, with the User ID of the contact added. This could be used to send a message immediately after 
+```js
+myBot.on('addedContact', (userID) => {
+    ...
+});
+```

@@ -165,6 +165,7 @@ class MVContactBot extends EventEmitter {
                 this.logger.log("ERROR", `Error adding contact ${friend.id}: ${err}`);
                 throw new Error(err);
             });
+            this.emit("addedContact", friend.id);
         });
     }
 
